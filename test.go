@@ -36,6 +36,7 @@ type PinManager struct {
 	exporter   *os.File
 	unexporter *os.File
 	files      map[Pin]*os.File
+	last       map[Pin]bool
 }
 
 func NewPinManager() (mgr *PinManager, err error) {
@@ -63,6 +64,7 @@ func NewPinManager() (mgr *PinManager, err error) {
 		exporter:   exporter,
 		unexporter: unexporter,
 		files:      make(map[Pin]*os.File),
+		last:       make(map[Pin]bool),
 	}
 	// ensure we unexport when garbage-collected
 	runtime.SetFinalizer(mgr, func(mgr *PinManager) {
@@ -114,6 +116,9 @@ func (mgr *PinManager) Add(pin Pin) (err error) {
 }
 
 func (mgr *PinManager) Remove(pin Pin) {
+	// drop state
+	delete(mgr.last, pin)
+
 	// close file
 	if f, ok := mgr.files[pin]; ok {
 		f.Close()
@@ -146,6 +151,16 @@ func (mgr *PinManager) Set(pin Pin, value bool) (err error) {
 	if !ok {
 		return errors.New("Pin not added")
 	}
+
+	if last, ok := mgr.last[pin]; ok && value == last {
+		return
+	}
+	defer func() {
+		if err == nil {
+			mgr.last[pin] = value
+		}
+	}()
+
 	var intValue int = 0
 	if value {
 		intValue = 1
