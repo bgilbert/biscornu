@@ -4,6 +4,11 @@ import (
 	"image"
 )
 
+const (
+	WIDTH  = 32
+	HEIGHT = 32
+)
+
 func draw(mgr *PinManager, img *image.RGBA) {
 	yStride := img.Rect.Dy() / 2
 	for y := 0; y < yStride; y++ {
@@ -47,7 +52,7 @@ func main() {
 		}
 		mgr.Set(pin, false)
 	}
-	for i := 0; i < 32; i++ {
+	for i := 0; i < WIDTH; i++ {
 		mgr.Strobe(PIN_CLK)
 	}
 	mgr.Strobe(PIN_LAT)
@@ -59,9 +64,9 @@ func main() {
 	mgr.Set(PIN_OE, false)
 
 	// create image
-	img := image.NewRGBA(image.Rect(0, 0, 32, 32))
-	for y := 0; y < 32; y++ {
-		for x := 0; x < 32; x++ {
+	img := image.NewRGBA(image.Rect(0, 0, WIDTH, HEIGHT))
+	for y := 0; y < img.Rect.Dy(); y++ {
+		for x := 0; x < img.Rect.Dx(); x++ {
 			color := img.RGBAAt(x, y)
 			if x == y {
 				color.R = 255
