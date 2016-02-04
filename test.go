@@ -158,6 +158,14 @@ func (mgr *PinManager) Set(pin Pin, value bool) (err error) {
 	return
 }
 
+func (mgr *PinManager) Strobe(pin Pin) (err error) {
+	err = mgr.Set(pin, true)
+	if err == nil {
+		err = mgr.Set(pin, false)
+	}
+	return
+}
+
 func draw(mgr *PinManager, img *image.RGBA) {
 	yStride := img.Rect.Dy() / 2
 	for y := 0; y < yStride; y++ {
@@ -170,12 +178,10 @@ func draw(mgr *PinManager, img *image.RGBA) {
 			mgr.Set(PIN_R2, color.R > 128)
 			mgr.Set(PIN_G2, color.G > 128)
 			mgr.Set(PIN_B2, color.B > 128)
-			mgr.Set(PIN_CLK, true)
-			mgr.Set(PIN_CLK, false)
+			mgr.Strobe(PIN_CLK)
 		}
 		mgr.Set(PIN_OE, true)
-		mgr.Set(PIN_LAT, true)
-		mgr.Set(PIN_LAT, false)
+		mgr.Strobe(PIN_LAT)
 		mgr.Set(PIN_A3, y & 0x8 != 0)
 		mgr.Set(PIN_A2, y & 0x4 != 0)
 		mgr.Set(PIN_A1, y & 0x2 != 0)
@@ -204,11 +210,9 @@ func main() {
 		mgr.Set(pin, false)
 	}
 	for i := 0; i < 32; i++ {
-		mgr.Set(PIN_CLK, true)
-		mgr.Set(PIN_CLK, false)
+		mgr.Strobe(PIN_CLK)
 	}
-	mgr.Set(PIN_LAT, true)
-	mgr.Set(PIN_LAT, false)
+	mgr.Strobe(PIN_LAT)
 	if err = mgr.Add(PIN_OE); err != nil {
 		panic(err)
 	}
