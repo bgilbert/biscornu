@@ -19,7 +19,7 @@ const (
 	PIN_G2 = Pin(16)
 	PIN_B2 = Pin(23)
 
-	PIN_OE = Pin(4)
+	PIN_OE  = Pin(4)
 	PIN_CLK = Pin(17)
 	PIN_LAT = Pin(21)
 
@@ -33,9 +33,9 @@ var PINS_ADDRESS []Pin = []Pin{PIN_A0, PIN_A1, PIN_A2, PIN_A3}
 var PINS_DATA []Pin = []Pin{PIN_R1, PIN_G1, PIN_B1, PIN_R2, PIN_G2, PIN_B2}
 
 type PinManager struct {
-	exporter	*os.File
-	unexporter	*os.File
-	files		map[Pin]*os.File
+	exporter   *os.File
+	unexporter *os.File
+	files      map[Pin]*os.File
 }
 
 func NewPinManager() (mgr *PinManager, err error) {
@@ -60,9 +60,9 @@ func NewPinManager() (mgr *PinManager, err error) {
 	}()
 
 	mgr = &PinManager{
-		exporter: exporter,
+		exporter:   exporter,
 		unexporter: unexporter,
-		files: make(map[Pin]*os.File),
+		files:      make(map[Pin]*os.File),
 	}
 	// ensure we unexport when garbage-collected
 	runtime.SetFinalizer(mgr, func(mgr *PinManager) {
@@ -152,7 +152,7 @@ func (mgr *PinManager) Set(pin Pin, value bool) (err error) {
 	}
 	_, err = fmt.Fprintln(f, intValue)
 	_, err2 := f.Seek(0, 0)
-	if (err == nil && err2 != nil) {
+	if err == nil && err2 != nil {
 		err = err2
 	}
 	return
@@ -174,7 +174,7 @@ func draw(mgr *PinManager, img *image.RGBA) {
 			mgr.Set(PIN_R1, color.R > 128)
 			mgr.Set(PIN_G1, color.G > 128)
 			mgr.Set(PIN_B1, color.B > 128)
-			color = img.RGBAAt(x, y + yStride)
+			color = img.RGBAAt(x, y+yStride)
 			mgr.Set(PIN_R2, color.R > 128)
 			mgr.Set(PIN_G2, color.G > 128)
 			mgr.Set(PIN_B2, color.B > 128)
@@ -182,10 +182,10 @@ func draw(mgr *PinManager, img *image.RGBA) {
 		}
 		mgr.Set(PIN_OE, true)
 		mgr.Strobe(PIN_LAT)
-		mgr.Set(PIN_A3, y & 0x8 != 0)
-		mgr.Set(PIN_A2, y & 0x4 != 0)
-		mgr.Set(PIN_A1, y & 0x2 != 0)
-		mgr.Set(PIN_A0, y & 0x1 != 0)
+		mgr.Set(PIN_A3, y&0x8 != 0)
+		mgr.Set(PIN_A2, y&0x4 != 0)
+		mgr.Set(PIN_A1, y&0x2 != 0)
+		mgr.Set(PIN_A0, y&0x1 != 0)
 		mgr.Set(PIN_OE, false)
 	}
 }
@@ -228,7 +228,7 @@ func main() {
 			if x == y {
 				color.R = 255
 			}
-			if x == 31 - y {
+			if x == 31-y {
 				color.G = 255
 			}
 			if x == 16 {
