@@ -12,7 +12,7 @@ const (
 	HEIGHT = 32
 )
 
-func draw(mgr *PinManager, img *image.RGBA) {
+func paint(mgr *PinManager, img *image.RGBA) {
 	yStride := img.Rect.Dy() / 2
 	for y := 0; y < yStride; y++ {
 		for x := 0; x < img.Rect.Dx(); x++ {
@@ -36,7 +36,7 @@ func draw(mgr *PinManager, img *image.RGBA) {
 	}
 }
 
-func drawer(cimage <-chan image.RGBA, csig <-chan os.Signal, cdone chan<- bool) {
+func painter(cimage <-chan image.RGBA, csig <-chan os.Signal, cdone chan<- bool) {
 	// set exit action
 	defer func() {
 		cdone <- true
@@ -74,7 +74,7 @@ func drawer(cimage <-chan image.RGBA, csig <-chan os.Signal, cdone chan<- bool) 
 	// get initial image
 	img := <-cimage
 
-	// draw forever
+	// paint forever
 	for {
 		// check for signals, which have priority over new images
 		select {
@@ -89,7 +89,7 @@ func drawer(cimage <-chan image.RGBA, csig <-chan os.Signal, cdone chan<- bool) 
 		default:
 		}
 
-		draw(mgr, &img)
+		paint(mgr, &img)
 	}
 }
 
@@ -98,10 +98,10 @@ func main() {
 	csig := make(chan os.Signal, 1)
 	signal.Notify(csig, syscall.SIGINT, syscall.SIGTERM)
 
-	// start drawer
+	// start painter
 	cimage := make(chan image.RGBA)
 	cdone := make(chan bool)
-	go drawer(cimage, csig, cdone)
+	go painter(cimage, csig, cdone)
 
 	// create image and send it
 	img := image.NewRGBA(image.Rect(0, 0, WIDTH, HEIGHT))
@@ -123,6 +123,6 @@ func main() {
 	}
 	cimage <- *img
 
-	// block until drawer exits
+	// block until painter exits
 	<-cdone
 }
