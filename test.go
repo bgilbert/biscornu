@@ -33,7 +33,7 @@ func draw(mgr *PinManager, img *image.RGBA) {
 	}
 }
 
-func main() {
+func drawer(cimage <-chan image.RGBA) {
 	// set up pin manager
 	mgr, err := NewPinManager()
 	if err != nil {
@@ -63,7 +63,27 @@ func main() {
 	defer mgr.Remove(PIN_OE)
 	mgr.Set(PIN_OE, false)
 
-	// create image
+	// get initial image
+	img := <-cimage
+
+	// draw forever
+	for {
+		// check for new image
+		select {
+		case img = <-cimage:
+		default:
+		}
+
+		draw(mgr, &img)
+	}
+}
+
+func main() {
+	// start drawer
+	cimage := make(chan image.RGBA)
+	go drawer(cimage)
+
+	// create image and send it
 	img := image.NewRGBA(image.Rect(0, 0, WIDTH, HEIGHT))
 	for y := 0; y < img.Rect.Dy(); y++ {
 		for x := 0; x < img.Rect.Dx(); x++ {
@@ -81,7 +101,8 @@ func main() {
 			img.SetRGBA(x, y, color)
 		}
 	}
-	for {
-		draw(mgr, img)
-	}
+	cimage <- *img
+
+	// block forever
+	<-make(chan int)
 }
