@@ -2,6 +2,9 @@ package main
 
 import (
 	"image"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 const (
@@ -33,7 +36,12 @@ func draw(mgr *PinManager, img *image.RGBA) {
 	}
 }
 
-func drawer(cimage <-chan image.RGBA) {
+func drawer(cimage <-chan image.RGBA, csig <-chan os.Signal, cdone chan<- bool) {
+	// set exit action
+	defer func() {
+		cdone <- true
+	}()
+
 	// set up pin manager
 	mgr, err := NewPinManager()
 	if err != nil {
@@ -68,6 +76,13 @@ func drawer(cimage <-chan image.RGBA) {
 
 	// draw forever
 	for {
+		// check for signals, which have priority over new images
+		select {
+		case <-csig:
+			return
+		default:
+		}
+
 		// check for new image
 		select {
 		case img = <-cimage:
@@ -79,9 +94,14 @@ func drawer(cimage <-chan image.RGBA) {
 }
 
 func main() {
+	// exit on SIGINT/SIGTERM
+	csig := make(chan os.Signal, 1)
+	signal.Notify(csig, syscall.SIGINT, syscall.SIGTERM)
+
 	// start drawer
 	cimage := make(chan image.RGBA)
-	go drawer(cimage)
+	cdone := make(chan bool)
+	go drawer(cimage, csig, cdone)
 
 	// create image and send it
 	img := image.NewRGBA(image.Rect(0, 0, WIDTH, HEIGHT))
@@ -103,6 +123,6 @@ func main() {
 	}
 	cimage <- *img
 
-	// block forever
-	<-make(chan int)
+	// block until drawer exits
+	<-cdone
 }
