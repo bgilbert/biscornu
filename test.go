@@ -2,6 +2,7 @@ package main
 
 import (
 	"image"
+	"image/color"
 	"os"
 	"os/signal"
 	"syscall"
@@ -93,6 +94,32 @@ func painter(cimage <-chan image.RGBA, csig <-chan os.Signal, cdone chan<- bool)
 	}
 }
 
+func imager(cimage chan<- image.RGBA) {
+	// create images and send them
+	img := image.NewRGBA(image.Rect(0, 0, WIDTH, HEIGHT))
+	for frame := 0; ; frame++ {
+		for y := 0; y < img.Rect.Dy(); y++ {
+			for x := 0; x < img.Rect.Dx(); x++ {
+				col := (x + frame) % img.Rect.Dx()
+				cell := color.RGBA{
+					A: 255,
+				}
+				if x == y {
+					cell.R = 255
+				}
+				if x == 31-y {
+					cell.G = 255
+				}
+				if x == 16 {
+					cell.B = 255
+				}
+				img.SetRGBA(col, y, cell)
+			}
+		}
+		cimage <- *img
+	}
+}
+
 func main() {
 	// exit on SIGINT/SIGTERM
 	csig := make(chan os.Signal, 1)
@@ -103,25 +130,8 @@ func main() {
 	cdone := make(chan bool)
 	go painter(cimage, csig, cdone)
 
-	// create image and send it
-	img := image.NewRGBA(image.Rect(0, 0, WIDTH, HEIGHT))
-	for y := 0; y < img.Rect.Dy(); y++ {
-		for x := 0; x < img.Rect.Dx(); x++ {
-			color := img.RGBAAt(x, y)
-			if x == y {
-				color.R = 255
-			}
-			if x == 31-y {
-				color.G = 255
-			}
-			if x == 16 {
-				color.B = 255
-			}
-			color.A = 255
-			img.SetRGBA(x, y, color)
-		}
-	}
-	cimage <- *img
+	// start sending images
+	go imager(cimage)
 
 	// block until painter exits
 	<-cdone
