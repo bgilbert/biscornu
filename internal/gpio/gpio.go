@@ -9,14 +9,14 @@ import (
 
 type Pin int
 
-type PinManager struct {
+type Gpio struct {
 	exporter   *os.File
 	unexporter *os.File
 	files      map[Pin]*os.File
 	last       map[Pin]bool
 }
 
-func NewPinManager() (mgr *PinManager, err error) {
+func New() (mgr *Gpio, err error) {
 	exporter, err := os.OpenFile("/sys/class/gpio/export", os.O_WRONLY, 0)
 	if err != nil {
 		return
@@ -37,20 +37,20 @@ func NewPinManager() (mgr *PinManager, err error) {
 		}
 	}()
 
-	mgr = &PinManager{
+	mgr = &Gpio{
 		exporter:   exporter,
 		unexporter: unexporter,
 		files:      make(map[Pin]*os.File),
 		last:       make(map[Pin]bool),
 	}
 	// ensure we unexport when garbage-collected
-	runtime.SetFinalizer(mgr, func(mgr *PinManager) {
+	runtime.SetFinalizer(mgr, func(mgr *Gpio) {
 		mgr.Close()
 	})
 	return
 }
 
-func (mgr *PinManager) Add(pin Pin) (err error) {
+func (mgr *Gpio) Add(pin Pin) (err error) {
 	// check for double add
 	if _, ok := mgr.files[pin]; ok {
 		return errors.New("Pin already added")
@@ -92,7 +92,7 @@ func (mgr *PinManager) Add(pin Pin) (err error) {
 	return
 }
 
-func (mgr *PinManager) Remove(pin Pin) {
+func (mgr *Gpio) Remove(pin Pin) {
 	// drop state
 	delete(mgr.last, pin)
 
@@ -110,7 +110,7 @@ func (mgr *PinManager) Remove(pin Pin) {
 	}
 }
 
-func (mgr *PinManager) Close() {
+func (mgr *Gpio) Close() {
 	if mgr.files == nil {
 		// already closed; perhaps we are running again as a finalizer
 		return
@@ -123,7 +123,7 @@ func (mgr *PinManager) Close() {
 	mgr.unexporter.Close()
 }
 
-func (mgr *PinManager) Set(pin Pin, value bool) (err error) {
+func (mgr *Gpio) Set(pin Pin, value bool) (err error) {
 	f, ok := mgr.files[pin]
 	if !ok {
 		return errors.New("Pin not added")
@@ -150,7 +150,7 @@ func (mgr *PinManager) Set(pin Pin, value bool) (err error) {
 	return
 }
 
-func (mgr *PinManager) Strobe(pin Pin) (err error) {
+func (mgr *Gpio) Strobe(pin Pin) (err error) {
 	err = mgr.Set(pin, true)
 	if err == nil {
 		err = mgr.Set(pin, false)

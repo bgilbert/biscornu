@@ -36,7 +36,7 @@ const (
 	HEIGHT = 32
 )
 
-func paint(mgr *gpio.PinManager, img *image.RGBA) {
+func paint(mgr *gpio.Gpio, img *image.RGBA) {
 	yStride := img.Rect.Dy() / 2
 	for y := 0; y < yStride; y++ {
 		for x := 0; x < img.Rect.Dx(); x++ {
@@ -67,7 +67,7 @@ func painter(cimage <-chan image.RGBA, csig <-chan os.Signal, cdone chan<- bool)
 	}()
 
 	// set up pin manager
-	mgr, err := gpio.NewPinManager()
+	mgr, err := gpio.New()
 	if err != nil {
 		panic(err)
 	}
