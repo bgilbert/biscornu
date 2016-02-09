@@ -44,9 +44,7 @@ func New() (mgr *Gpio, err error) {
 		last:       make(map[Pin]bool),
 	}
 	// ensure we unexport when garbage-collected
-	runtime.SetFinalizer(mgr, func(mgr *Gpio) {
-		mgr.Close()
-	})
+	runtime.SetFinalizer(mgr, (*Gpio).Close)
 	return
 }
 
