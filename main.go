@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/bgilbert/biscornu/internal/gpio"
 	"image"
 	"image/color"
 	"os"
@@ -9,33 +10,33 @@ import (
 )
 
 const (
-	PIN_R1 = Pin(5)
-	PIN_G1 = Pin(13)
-	PIN_B1 = Pin(6)
+	PIN_R1 = gpio.Pin(5)
+	PIN_G1 = gpio.Pin(13)
+	PIN_B1 = gpio.Pin(6)
 
-	PIN_R2 = Pin(12)
-	PIN_G2 = Pin(16)
-	PIN_B2 = Pin(23)
+	PIN_R2 = gpio.Pin(12)
+	PIN_G2 = gpio.Pin(16)
+	PIN_B2 = gpio.Pin(23)
 
-	PIN_OE  = Pin(4)
-	PIN_CLK = Pin(17)
-	PIN_LAT = Pin(21)
+	PIN_OE  = gpio.Pin(4)
+	PIN_CLK = gpio.Pin(17)
+	PIN_LAT = gpio.Pin(21)
 
-	PIN_A0 = Pin(22)
-	PIN_A1 = Pin(26)
-	PIN_A2 = Pin(27)
-	PIN_A3 = Pin(20)
+	PIN_A0 = gpio.Pin(22)
+	PIN_A1 = gpio.Pin(26)
+	PIN_A2 = gpio.Pin(27)
+	PIN_A3 = gpio.Pin(20)
 )
 
-var PINS_ADDRESS []Pin = []Pin{PIN_A0, PIN_A1, PIN_A2, PIN_A3}
-var PINS_DATA []Pin = []Pin{PIN_R1, PIN_G1, PIN_B1, PIN_R2, PIN_G2, PIN_B2}
+var PINS_ADDRESS []gpio.Pin = []gpio.Pin{PIN_A0, PIN_A1, PIN_A2, PIN_A3}
+var PINS_DATA []gpio.Pin = []gpio.Pin{PIN_R1, PIN_G1, PIN_B1, PIN_R2, PIN_G2, PIN_B2}
 
 const (
 	WIDTH  = 32
 	HEIGHT = 32
 )
 
-func paint(mgr *PinManager, img *image.RGBA) {
+func paint(mgr *gpio.PinManager, img *image.RGBA) {
 	yStride := img.Rect.Dy() / 2
 	for y := 0; y < yStride; y++ {
 		for x := 0; x < img.Rect.Dx(); x++ {
@@ -66,14 +67,14 @@ func painter(cimage <-chan image.RGBA, csig <-chan os.Signal, cdone chan<- bool)
 	}()
 
 	// set up pin manager
-	mgr, err := NewPinManager()
+	mgr, err := gpio.NewPinManager()
 	if err != nil {
 		panic(err)
 	}
 	defer mgr.Close()
 
 	// enable everything but OE, clear the latches, then enable OE (active low)
-	pins := make([]Pin, 0, 15)
+	pins := make([]gpio.Pin, 0, 15)
 	pins = append(pins, PINS_ADDRESS...)
 	pins = append(pins, PINS_DATA...)
 	pins = append(pins, PIN_CLK, PIN_LAT)
