@@ -9,6 +9,28 @@ import (
 )
 
 const (
+	PIN_R1 = Pin(5)
+	PIN_G1 = Pin(13)
+	PIN_B1 = Pin(6)
+
+	PIN_R2 = Pin(12)
+	PIN_G2 = Pin(16)
+	PIN_B2 = Pin(23)
+
+	PIN_OE  = Pin(4)
+	PIN_CLK = Pin(17)
+	PIN_LAT = Pin(21)
+
+	PIN_A0 = Pin(22)
+	PIN_A1 = Pin(26)
+	PIN_A2 = Pin(27)
+	PIN_A3 = Pin(20)
+)
+
+var PINS_ADDRESS []Pin = []Pin{PIN_A0, PIN_A1, PIN_A2, PIN_A3}
+var PINS_DATA []Pin = []Pin{PIN_R1, PIN_G1, PIN_B1, PIN_R2, PIN_G2, PIN_B2}
+
+const (
 	WIDTH  = 32
 	HEIGHT = 32
 )
