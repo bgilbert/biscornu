@@ -3,7 +3,6 @@ package display
 import (
 	"github.com/bgilbert/biscornu/internal/gpio"
 	"image"
-	"os"
 )
 
 const (
@@ -33,6 +32,12 @@ const (
 	Height = 32
 )
 
+type Display struct {
+	cimage chan image.RGBA
+	cterm  chan bool
+	cerr   chan error
+}
+
 func paint(mgr *gpio.Gpio, img *image.RGBA) {
 	yStride := img.Rect.Dy() / 2
 	for y := 0; y < yStride; y++ {
@@ -57,18 +62,20 @@ func paint(mgr *gpio.Gpio, img *image.RGBA) {
 	}
 }
 
-func Paint(cimage <-chan image.RGBA, csig <-chan os.Signal, cdone chan<- bool) {
-	// set exit action
-	defer func() {
-		cdone <- true
-	}()
-
+func (disp *Display) paint() {
 	// set up pin manager
 	mgr, err := gpio.New()
 	if err != nil {
-		panic(err)
+		disp.cerr <- err
+		return
 	}
+	defer func() {
+		disp.cerr <- nil
+	}()
 	defer mgr.Close()
+
+	// signal successful startup
+	disp.cerr <- nil
 
 	// enable everything but OE, clear the latches, then enable OE (active low)
 	pins := make([]gpio.Pin, 0, 15)
@@ -89,23 +96,43 @@ func Paint(cimage <-chan image.RGBA, csig <-chan os.Signal, cdone chan<- bool) {
 	mgr.Set(pinOE, false)
 
 	// get initial image
-	img := <-cimage
+	img := <-disp.cimage
 
 	// paint forever
 	for {
-		// check for signals, which have priority over new images
+		// check for termination, which has priority over new images
 		select {
-		case <-csig:
+		case <-disp.cterm:
 			return
 		default:
 		}
 
 		// check for new image
 		select {
-		case img = <-cimage:
+		case img = <-disp.cimage:
 		default:
 		}
 
 		paint(mgr, &img)
 	}
+}
+
+func New() (disp *Display, err error) {
+	disp = &Display{
+		cimage: make(chan image.RGBA),
+		cterm:  make(chan bool),
+		cerr:   make(chan error),
+	}
+	go disp.paint()
+	err = <-disp.cerr
+	return
+}
+
+func (disp *Display) Frame(img *image.RGBA) {
+	disp.cimage <- *img
+}
+
+func (disp *Display) Stop() {
+	disp.cterm <- true
+	<-disp.cerr
 }

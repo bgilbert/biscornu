@@ -28,14 +28,16 @@ func main() {
 		panic(err)
 	}
 
-	// start painter
-	cimage := make(chan image.RGBA)
-	cdone := make(chan bool)
-	go display.Paint(cimage, csig, cdone)
+	// start display
+	disp, err := display.New()
+	if err != nil {
+		panic(err)
+	}
 
 	// send image
-	cimage <- *img.(*image.RGBA)
+	disp.Frame(img.(*image.RGBA))
 
-	// block until painter exits
-	<-cdone
+	// wait for signal, stop display
+	<-csig
+	disp.Stop()
 }
