@@ -9,17 +9,17 @@ import (
 import "C"
 
 const (
-	MMAP_BASE = 0x3f200000
-	MMAP_SIZE = 160
+	mmapBase = 0x3f200000
+	mmapSize = 160
 
-	GPIO_OFF_FUNC  = 0x0
-	GPIO_OFF_SET   = 0x1c
-	GPIO_OFF_CLEAR = 0x28
+	gpioOffFunc  = 0x0
+	gpioOffSet   = 0x1c
+	gpioOffClear = 0x28
 
-	GPIO_FUNC_INPUT  = 0x0
-	GPIO_FUNC_OUTPUT = 0x1
+	gpioFuncInput  = 0x0
+	gpioFuncOutput = 0x1
 
-	MAX_PIN = 31
+	maxPin = 31
 )
 
 type Pin uint
@@ -30,7 +30,7 @@ type Gpio struct {
 }
 
 func New() (mgr *Gpio, err error) {
-	hdl := C.range_map(MMAP_BASE, MMAP_SIZE)
+	hdl := C.range_map(mmapBase, mmapSize)
 	if hdl == nil {
 		err = errors.New("mmap failed")
 		return
@@ -45,7 +45,7 @@ func New() (mgr *Gpio, err error) {
 }
 
 func (mgr *Gpio) setFunc(pin Pin, mode uint) {
-	off := GPIO_OFF_FUNC + 4*(C.size_t(pin)/10)
+	off := gpioOffFunc + 4*(C.size_t(pin)/10)
 	shift := 3 * (pin % 10)
 	cur := uint(C.range_get_u32(mgr.hdl, off))
 	val := (cur &^ (0x7 << shift)) | (mode << shift)
@@ -55,27 +55,27 @@ func (mgr *Gpio) setFunc(pin Pin, mode uint) {
 func (mgr *Gpio) set(pin Pin, value bool) {
 	var off C.size_t
 	if value {
-		off = GPIO_OFF_SET
+		off = gpioOffSet
 	} else {
-		off = GPIO_OFF_CLEAR
+		off = gpioOffClear
 	}
 	C.range_set_u32(mgr.hdl, off, 1<<pin)
 	mgr.last[pin] = value
 }
 
 func (mgr *Gpio) Add(pin Pin) {
-	if pin > MAX_PIN {
+	if pin > maxPin {
 		panic("Requested unsupported pin")
 	}
 	mgr.set(pin, false)
-	mgr.setFunc(pin, GPIO_FUNC_OUTPUT)
+	mgr.setFunc(pin, gpioFuncOutput)
 }
 
 func (mgr *Gpio) Remove(pin Pin) {
 	if _, ok := mgr.last[pin]; !ok {
 		return
 	}
-	mgr.setFunc(pin, GPIO_FUNC_INPUT)
+	mgr.setFunc(pin, gpioFuncInput)
 	delete(mgr.last, pin)
 }
 
