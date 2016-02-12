@@ -34,6 +34,11 @@ var pinsData []gpio.Pin = []gpio.Pin{pinR1, pinG1, pinB1, pinR2, pinG2, pinB2}
 const (
 	Width  = 32
 	Height = 32
+
+	fps       = 30
+	colorBits = 2
+	colors    = 1 << colorBits
+	period    = 1000000000 / (fps * (Height / 2) * (colors - 1))
 )
 
 type Display struct {
@@ -42,27 +47,34 @@ type Display struct {
 	cerr   chan error
 }
 
-func paint(mgr *gpio.Gpio, img *image.RGBA) {
+func paint(mgr *gpio.Gpio, interval C.int, img *image.RGBA) {
 	yStride := img.Rect.Dy() / 2
 	for y := img.Rect.Min.Y; y < img.Rect.Min.Y+yStride; y++ {
-		for x := img.Rect.Min.X; x < img.Rect.Max.X; x++ {
-			color := img.RGBAAt(x, y)
-			mgr.Set(pinR1, color.R > 128)
-			mgr.Set(pinG1, color.G > 128)
-			mgr.Set(pinB1, color.B > 128)
-			color = img.RGBAAt(x, y+yStride)
-			mgr.Set(pinR2, color.R > 128)
-			mgr.Set(pinG2, color.G > 128)
-			mgr.Set(pinB2, color.B > 128)
-			mgr.Strobe(pinClk)
+		for i := 1; i < colors; i++ {
+			thresh := uint8(i * 256 / colors)
+			for x := img.Rect.Min.X; x < img.Rect.Max.X; x++ {
+				color := img.RGBAAt(x, y)
+				mgr.Set(pinR1, color.R > thresh)
+				mgr.Set(pinG1, color.G > thresh)
+				mgr.Set(pinB1, color.B > thresh)
+				color = img.RGBAAt(x, y+yStride)
+				mgr.Set(pinR2, color.R > thresh)
+				mgr.Set(pinG2, color.G > thresh)
+				mgr.Set(pinB2, color.B > thresh)
+				mgr.Strobe(pinClk)
+			}
+			// all set up to strobe; wait for end of interval
+			C.interval_wait(interval)
+			if i == 1 {
+				mgr.Set(pinOE, true)
+				mgr.Set(pinA3, y&0x8 != 0)
+				mgr.Set(pinA2, y&0x4 != 0)
+				mgr.Set(pinA1, y&0x2 != 0)
+				mgr.Set(pinA0, y&0x1 != 0)
+			}
+			mgr.Strobe(pinLat)
+			mgr.Set(pinOE, false)
 		}
-		mgr.Set(pinOE, true)
-		mgr.Strobe(pinLat)
-		mgr.Set(pinA3, y&0x8 != 0)
-		mgr.Set(pinA2, y&0x4 != 0)
-		mgr.Set(pinA1, y&0x2 != 0)
-		mgr.Set(pinA0, y&0x1 != 0)
-		mgr.Set(pinOE, false)
 	}
 }
 
@@ -81,7 +93,7 @@ func (disp *Display) paint() {
 	defer mgr.Close()
 
 	// create interval
-	interval := C.interval_create(100000)
+	interval := C.interval_create(period)
 	if interval == -1 {
 		err = errors.New("Couldn't create interval")
 		return
@@ -127,7 +139,7 @@ func (disp *Display) paint() {
 		default:
 		}
 
-		paint(mgr, &img)
+		paint(mgr, interval, &img)
 	}
 }
 
