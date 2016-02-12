@@ -40,8 +40,8 @@ type Display struct {
 
 func paint(mgr *gpio.Gpio, img *image.RGBA) {
 	yStride := img.Rect.Dy() / 2
-	for y := 0; y < yStride; y++ {
-		for x := 0; x < img.Rect.Dx(); x++ {
+	for y := img.Rect.Min.Y; y < img.Rect.Min.Y+yStride; y++ {
+		for x := img.Rect.Min.X; x < img.Rect.Max.X; x++ {
 			color := img.RGBAAt(x, y)
 			mgr.Set(pinR1, color.R > 128)
 			mgr.Set(pinG1, color.G > 128)
@@ -129,6 +129,9 @@ func New() (disp *Display, err error) {
 }
 
 func (disp *Display) Frame(img *image.RGBA) {
+	if img.Rect.Dx() != Width || img.Rect.Dy() != Height {
+		panic("Incorrect image size")
+	}
 	disp.cimage <- *img
 }
 
