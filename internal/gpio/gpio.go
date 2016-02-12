@@ -2,156 +2,106 @@ package gpio
 
 import (
 	"errors"
-	"fmt"
-	"os"
 	"runtime"
 )
 
-type Pin int
+// #include "mmap.h"
+import "C"
+
+const (
+	MMAP_BASE = 0x3f200000
+	MMAP_SIZE = 160
+
+	GPIO_OFF_FUNC  = 0x0
+	GPIO_OFF_SET   = 0x1c
+	GPIO_OFF_CLEAR = 0x28
+
+	GPIO_FUNC_INPUT  = 0x0
+	GPIO_FUNC_OUTPUT = 0x1
+
+	MAX_PIN = 31
+)
+
+type Pin uint
 
 type Gpio struct {
-	exporter   *os.File
-	unexporter *os.File
-	files      map[Pin]*os.File
-	last       map[Pin]bool
+	hdl  *C.struct_range
+	last map[Pin]bool
 }
 
 func New() (mgr *Gpio, err error) {
-	exporter, err := os.OpenFile("/sys/class/gpio/export", os.O_WRONLY, 0)
-	if err != nil {
+	hdl := C.range_map(MMAP_BASE, MMAP_SIZE)
+	if hdl == nil {
+		err = errors.New("mmap failed")
 		return
 	}
-	defer func() {
-		if err != nil {
-			exporter.Close()
-		}
-	}()
-
-	unexporter, err := os.OpenFile("/sys/class/gpio/unexport", os.O_WRONLY, 0)
-	if err != nil {
-		return
-	}
-	defer func() {
-		if err != nil {
-			unexporter.Close()
-		}
-	}()
-
 	mgr = &Gpio{
-		exporter:   exporter,
-		unexporter: unexporter,
-		files:      make(map[Pin]*os.File),
-		last:       make(map[Pin]bool),
+		hdl:  hdl,
+		last: make(map[Pin]bool),
 	}
 	// ensure we unexport when garbage-collected
 	runtime.SetFinalizer(mgr, (*Gpio).Close)
 	return
 }
 
-func (mgr *Gpio) Add(pin Pin) (err error) {
-	// check for double add
-	if _, ok := mgr.files[pin]; ok {
-		return errors.New("Pin already added")
-	}
+func (mgr *Gpio) setFunc(pin Pin, mode uint) {
+	off := GPIO_OFF_FUNC + 4*(C.size_t(pin)/10)
+	shift := 3 * (pin % 10)
+	cur := uint(C.range_get_u32(mgr.hdl, off))
+	val := (cur &^ (0x7 << shift)) | (mode << shift)
+	C.range_set_u32(mgr.hdl, off, C.uint32_t(val))
+}
 
-	// export pin
-	if _, err = fmt.Fprintln(mgr.exporter, pin); err != nil {
-		return
+func (mgr *Gpio) set(pin Pin, value bool) {
+	var off C.size_t
+	if value {
+		off = GPIO_OFF_SET
+	} else {
+		off = GPIO_OFF_CLEAR
 	}
-	defer func() {
-		if err != nil {
-			mgr.Remove(pin)
-		}
-	}()
-	if _, err = mgr.exporter.Seek(0, 0); err != nil {
-		return
-	}
+	C.range_set_u32(mgr.hdl, off, 1<<pin)
+	mgr.last[pin] = value
+}
 
-	// set direction
-	path := fmt.Sprintf("/sys/class/gpio/gpio%d/direction", pin)
-	f, err := os.OpenFile(path, os.O_WRONLY, 0)
-	if err != nil {
-		return
+func (mgr *Gpio) Add(pin Pin) {
+	if pin > MAX_PIN {
+		panic("Requested unsupported pin")
 	}
-	defer f.Close()
-	_, err = fmt.Fprintln(f, "out")
-	if err != nil {
-		return
-	}
-
-	// open value file
-	path = fmt.Sprintf("/sys/class/gpio/gpio%d/value", pin)
-	if f, err = os.OpenFile(path, os.O_WRONLY, 0); err != nil {
-		return
-	}
-
-	// commit
-	mgr.files[pin] = f
-	return
+	mgr.set(pin, false)
+	mgr.setFunc(pin, GPIO_FUNC_OUTPUT)
 }
 
 func (mgr *Gpio) Remove(pin Pin) {
-	// drop state
+	if _, ok := mgr.last[pin]; !ok {
+		return
+	}
+	mgr.setFunc(pin, GPIO_FUNC_INPUT)
 	delete(mgr.last, pin)
-
-	// close file
-	if f, ok := mgr.files[pin]; ok {
-		f.Close()
-		delete(mgr.files, pin)
-	}
-
-	// try unexporting if exported; ignore errors
-	path := fmt.Sprintf("/sys/class/gpio/gpio%d", pin)
-	if _, err := os.Stat(path); err == nil {
-		fmt.Fprintln(mgr.unexporter, pin)
-		mgr.unexporter.Seek(0, 0)
-	}
 }
 
 func (mgr *Gpio) Close() {
-	if mgr.files == nil {
+	if mgr.hdl == nil {
 		// already closed; perhaps we are running again as a finalizer
 		return
 	}
-	for pin := range mgr.files {
+	for pin := range mgr.last {
 		mgr.Remove(pin)
 	}
-	mgr.files = nil
-	mgr.exporter.Close()
-	mgr.unexporter.Close()
+	C.range_unmap(mgr.hdl)
+	mgr.hdl = nil
 }
 
-func (mgr *Gpio) Set(pin Pin, value bool) (err error) {
-	f, ok := mgr.files[pin]
+func (mgr *Gpio) Set(pin Pin, value bool) {
+	last, ok := mgr.last[pin]
 	if !ok {
-		return errors.New("Pin not added")
+		panic("Attempted to set unconfigured pin")
 	}
-
-	if last, ok := mgr.last[pin]; ok && value == last {
-		return
+	if value != last {
+		mgr.set(pin, value)
 	}
-	defer func() {
-		if err == nil {
-			mgr.last[pin] = value
-		}
-	}()
-
-	var intValue int = 0
-	if value {
-		intValue = 1
-	}
-	_, err = fmt.Fprintln(f, intValue)
-	_, err2 := f.Seek(0, 0)
-	if err == nil && err2 != nil {
-		err = err2
-	}
-	return
 }
 
-func (mgr *Gpio) Strobe(pin Pin) (err error) {
-	err = mgr.Set(pin, true)
-	if err == nil {
-		err = mgr.Set(pin, false)
-	}
-	return
+func (mgr *Gpio) Strobe(pin Pin) {
+	mgr.Set(pin, true)
+	mgr.Set(pin, false)
 }

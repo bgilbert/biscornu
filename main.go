@@ -79,18 +79,14 @@ func painter(cimage <-chan image.RGBA, csig <-chan os.Signal, cdone chan<- bool)
 	pins = append(pins, PINS_DATA...)
 	pins = append(pins, PIN_CLK, PIN_LAT)
 	for _, pin := range pins {
-		if err := mgr.Add(pin); err != nil {
-			panic(err)
-		}
+		mgr.Add(pin)
 		mgr.Set(pin, false)
 	}
 	for i := 0; i < WIDTH; i++ {
 		mgr.Strobe(PIN_CLK)
 	}
 	mgr.Strobe(PIN_LAT)
-	if err = mgr.Add(PIN_OE); err != nil {
-		panic(err)
-	}
+	mgr.Add(PIN_OE)
 	// make sure OE is removed first
 	defer mgr.Remove(PIN_OE)
 	mgr.Set(PIN_OE, false)
