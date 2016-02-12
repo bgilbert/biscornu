@@ -3,7 +3,7 @@ package main
 import (
 	"github.com/bgilbert/biscornu/internal/gpio"
 	"image"
-	"image/color"
+	"image/png"
 	"os"
 	"os/signal"
 	"syscall"
@@ -113,44 +113,32 @@ func painter(cimage <-chan image.RGBA, csig <-chan os.Signal, cdone chan<- bool)
 	}
 }
 
-func imager(cimage chan<- image.RGBA) {
-	// create images and send them
-	img := image.NewRGBA(image.Rect(0, 0, WIDTH, HEIGHT))
-	for frame := 0; ; frame++ {
-		for y := 0; y < img.Rect.Dy(); y++ {
-			for x := 0; x < img.Rect.Dx(); x++ {
-				col := (x + frame) % img.Rect.Dx()
-				cell := color.RGBA{
-					A: 255,
-				}
-				if x == y {
-					cell.R = 255
-				}
-				if x == 31-y {
-					cell.G = 255
-				}
-				if x == 16 {
-					cell.B = 255
-				}
-				img.SetRGBA(col, y, cell)
-			}
-		}
-		cimage <- *img
-	}
-}
-
 func main() {
 	// exit on SIGINT/SIGTERM
 	csig := make(chan os.Signal, 1)
 	signal.Notify(csig, syscall.SIGINT, syscall.SIGTERM)
+
+	// load image
+	if len(os.Args) < 2 {
+		panic("Specify input image")
+	}
+	f, err := os.Open(os.Args[1])
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+	img, err := png.Decode(f)
+	if err != nil {
+		panic(err)
+	}
 
 	// start painter
 	cimage := make(chan image.RGBA)
 	cdone := make(chan bool)
 	go painter(cimage, csig, cdone)
 
-	// start sending images
-	go imager(cimage)
+	// send image
+	cimage <- *img.(*image.RGBA)
 
 	// block until painter exits
 	<-cdone
