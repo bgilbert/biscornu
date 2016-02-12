@@ -1,9 +1,13 @@
 package display
 
 import (
+	"errors"
 	"github.com/bgilbert/biscornu/internal/gpio"
 	"image"
 )
+
+// #include "interval.h"
+import "C"
 
 const (
 	pinR1 = gpio.Pin(5)
@@ -63,16 +67,26 @@ func paint(mgr *gpio.Gpio, img *image.RGBA) {
 }
 
 func (disp *Display) paint() {
+	// set up exit handler
+	var err error
+	defer func() {
+		disp.cerr <- err
+	}()
+
 	// set up pin manager
 	mgr, err := gpio.New()
 	if err != nil {
-		disp.cerr <- err
 		return
 	}
-	defer func() {
-		disp.cerr <- nil
-	}()
 	defer mgr.Close()
+
+	// create interval
+	interval := C.interval_create(100000)
+	if interval == -1 {
+		err = errors.New("Couldn't create interval")
+		return
+	}
+	defer C.interval_destroy(interval)
 
 	// signal successful startup
 	disp.cerr <- nil
