@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/bgilbert/biscornu/internal/gpio"
 	"image"
+	"syscall"
 )
 
 // #include "interval.h"
@@ -204,5 +205,5 @@ func (interval interval) wait() (count uint64) {
 }
 
 func (interval interval) close() {
-	C.interval_destroy(C.int(interval))
+	syscall.Close(int(interval))
 }

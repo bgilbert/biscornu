@@ -32,7 +32,3 @@ uint64_t interval_wait(int fd) {
 	}
 	return count;
 }
-
-void interval_destroy(int fd) {
-	close(fd);
-}
