@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 
-int interval_create(uint64_t ns);
 uint64_t interval_wait(int fd);
 
 #endif

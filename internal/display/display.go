@@ -4,9 +4,11 @@ import (
 	"errors"
 	"github.com/bgilbert/biscornu/internal/gpio"
 	"image"
+	"reflect"
 	"syscall"
 )
 
+// #include <sys/timerfd.h>
 // #include "interval.h"
 import "C"
 
@@ -192,10 +194,28 @@ func (disp *Display) Stop() {
 
 type interval int
 
-func newInterval(ns uint64) (interval, error) {
-	fd := C.interval_create(C.uint64_t(ns))
-	if fd == -1 {
-		return 0, errors.New("Couldn't create interval")
+func newInterval(ns uint64) (_ interval, err error) {
+	fd, _, errno := syscall.Syscall(syscall.SYS_TIMERFD_CREATE, C.CLOCK_MONOTONIC, C.TFD_CLOEXEC, 0)
+	if fd == ^uintptr(0) {
+		return 0, errors.New("Couldn't create timerfd: " + errno.Error())
+	}
+	defer func() {
+		if err != nil {
+			syscall.Close(int(fd))
+		}
+	}()
+
+	tspec := C.struct_timespec{
+		tv_sec:  C.__time_t(ns / 1000000000),
+		tv_nsec: C.__syscall_slong_t(ns % 1000000000),
+	}
+	ispec := C.struct_itimerspec{
+		it_interval: tspec,
+		it_value:    tspec,
+	}
+	ret, _, errno := syscall.Syscall6(syscall.SYS_TIMERFD_SETTIME, fd, 0, reflect.ValueOf(&ispec).Pointer(), 0, 0, 0)
+	if ret == ^uintptr(0) {
+		return 0, errors.New("Couldn't set interval: " + errno.Error())
 	}
 	return interval(fd), nil
 }
