@@ -1,6 +1,8 @@
 package display
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
 	"github.com/bgilbert/biscornu/internal/gpio"
 	"image"
@@ -9,7 +11,6 @@ import (
 )
 
 // #include <sys/timerfd.h>
-// #include "interval.h"
 import "C"
 
 const (
@@ -221,7 +222,14 @@ func newInterval(ns uint64) (_ interval, err error) {
 }
 
 func (interval interval) wait() (count uint64) {
-	return uint64(C.interval_wait(C.int(interval)))
+	var buf [8]byte
+	n, err := syscall.Read(int(interval), buf[:])
+	if n < 8 || err != nil {
+		return
+	}
+	// We really want binary.NativeEndian, but Go doesn't have it
+	binary.Read(bytes.NewReader(buf[:]), binary.LittleEndian, &count)
+	return
 }
 
 func (interval interval) close() {
