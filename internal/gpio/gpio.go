@@ -25,8 +25,8 @@ const (
 type Pin uint
 
 type Gpio struct {
-	hdl  *C.struct_range
-	last map[Pin]bool
+	hdl    *C.struct_range
+	active map[Pin]bool
 }
 
 func New() (mgr *Gpio, err error) {
@@ -36,8 +36,8 @@ func New() (mgr *Gpio, err error) {
 		return
 	}
 	mgr = &Gpio{
-		hdl:  hdl,
-		last: make(map[Pin]bool),
+		hdl:    hdl,
+		active: make(map[Pin]bool),
 	}
 	// ensure we unexport when garbage-collected
 	runtime.SetFinalizer(mgr, (*Gpio).Close)
@@ -52,31 +52,21 @@ func (mgr *Gpio) setFunc(pin Pin, mode uint) {
 	C.range_set_u32(mgr.hdl, off, C.uint32_t(val))
 }
 
-func (mgr *Gpio) set(pin Pin, value bool) {
-	var off C.size_t
-	if value {
-		off = gpioOffSet
-	} else {
-		off = gpioOffClear
-	}
-	C.range_set_u32(mgr.hdl, off, 1<<pin)
-	mgr.last[pin] = value
-}
-
 func (mgr *Gpio) Add(pin Pin) {
 	if pin > maxPin {
 		panic("Requested unsupported pin")
 	}
-	mgr.set(pin, false)
+	mgr.Set(0, 1<<pin)
 	mgr.setFunc(pin, gpioFuncOutput)
+	mgr.active[pin] = true
 }
 
 func (mgr *Gpio) Remove(pin Pin) {
-	if _, ok := mgr.last[pin]; !ok {
+	if !mgr.active[pin] {
 		return
 	}
 	mgr.setFunc(pin, gpioFuncInput)
-	delete(mgr.last, pin)
+	delete(mgr.active, pin)
 }
 
 func (mgr *Gpio) Close() {
@@ -84,24 +74,25 @@ func (mgr *Gpio) Close() {
 		// already closed; perhaps we are running again as a finalizer
 		return
 	}
-	for pin := range mgr.last {
+	for pin := range mgr.active {
 		mgr.Remove(pin)
 	}
 	C.range_unmap(mgr.hdl)
 	mgr.hdl = nil
 }
 
-func (mgr *Gpio) Set(pin Pin, value bool) {
-	last, ok := mgr.last[pin]
-	if !ok {
-		panic("Attempted to set unconfigured pin")
+func (mgr *Gpio) Set(states uint32, mask uint32) {
+	val := states & mask
+	if val != 0 {
+		C.range_set_u32(mgr.hdl, gpioOffSet, C.uint32_t(val))
 	}
-	if value != last {
-		mgr.set(pin, value)
+	val = ^states & mask
+	if val != 0 {
+		C.range_set_u32(mgr.hdl, gpioOffClear, C.uint32_t(val))
 	}
 }
 
 func (mgr *Gpio) Strobe(pin Pin) {
-	mgr.Set(pin, true)
-	mgr.Set(pin, false)
+	mgr.Set(1<<pin, 1<<pin)
+	mgr.Set(0, 1<<pin)
 }

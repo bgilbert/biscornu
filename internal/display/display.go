@@ -53,27 +53,53 @@ func paint(mgr *gpio.Gpio, interval C.int, img *image.RGBA) {
 		for i := 1; i < colors; i++ {
 			thresh := uint8(i * 256 / colors)
 			for x := img.Rect.Min.X; x < img.Rect.Max.X; x++ {
+				var data uint32
 				color := img.RGBAAt(x, y)
-				mgr.Set(pinR1, color.R > thresh)
-				mgr.Set(pinG1, color.G > thresh)
-				mgr.Set(pinB1, color.B > thresh)
+				if color.R > thresh {
+					data |= 1 << pinR1
+				}
+				if color.G > thresh {
+					data |= 1 << pinG1
+				}
+				if color.B > thresh {
+					data |= 1 << pinB1
+				}
 				color = img.RGBAAt(x, y+yStride)
-				mgr.Set(pinR2, color.R > thresh)
-				mgr.Set(pinG2, color.G > thresh)
-				mgr.Set(pinB2, color.B > thresh)
+				if color.R > thresh {
+					data |= 1 << pinR2
+				}
+				if color.G > thresh {
+					data |= 1 << pinG2
+				}
+				if color.B > thresh {
+					data |= 1 << pinB2
+				}
+				mgr.Set(data, 1<<pinR1|1<<pinG1|1<<pinB1|1<<pinR2|1<<pinG2|1<<pinB2)
 				mgr.Strobe(pinClk)
 			}
 			// all set up to strobe; wait for end of interval
 			C.interval_wait(interval)
 			if i == 1 {
-				mgr.Set(pinOE, true)
-				mgr.Set(pinA3, y&0x8 != 0)
-				mgr.Set(pinA2, y&0x4 != 0)
-				mgr.Set(pinA1, y&0x2 != 0)
-				mgr.Set(pinA0, y&0x1 != 0)
+				var addr uint32
+				if y&0x8 != 0 {
+					addr |= 1 << pinA3
+				}
+				if y&0x4 != 0 {
+					addr |= 1 << pinA2
+				}
+				if y&0x2 != 0 {
+					addr |= 1 << pinA1
+				}
+				if y&0x1 != 0 {
+					addr |= 1 << pinA0
+				}
+				mgr.Set(1<<pinOE, 1<<pinOE)
+				mgr.Set(addr, 1<<pinA3|1<<pinA2|1<<pinA1|1<<pinA0)
 			}
 			mgr.Strobe(pinLat)
-			mgr.Set(pinOE, false)
+			if i == 1 {
+				mgr.Set(0, 1<<pinOE)
+			}
 		}
 	}
 }
@@ -110,7 +136,6 @@ func (disp *Display) paint() {
 	pins = append(pins, pinClk, pinLat)
 	for _, pin := range pins {
 		mgr.Add(pin)
-		mgr.Set(pin, false)
 	}
 	for i := 0; i < Width; i++ {
 		mgr.Strobe(pinClk)
@@ -119,7 +144,6 @@ func (disp *Display) paint() {
 	mgr.Add(pinOE)
 	// make sure OE is removed first
 	defer mgr.Remove(pinOE)
-	mgr.Set(pinOE, false)
 
 	// get initial image
 	img := <-disp.cimage
