@@ -47,7 +47,7 @@ type Display struct {
 	cerr   chan error
 }
 
-func paint(mgr *gpio.Gpio, interval C.int, img *image.RGBA) {
+func paint(mgr *gpio.Gpio, interval interval, img *image.RGBA) {
 	yStride := img.Rect.Dy() / 2
 	for y := img.Rect.Min.Y; y < img.Rect.Min.Y+yStride; y++ {
 		for i := 1; i < colors; i++ {
@@ -78,7 +78,7 @@ func paint(mgr *gpio.Gpio, interval C.int, img *image.RGBA) {
 				mgr.Strobe(pinClk)
 			}
 			// all set up to strobe; wait for end of interval
-			C.interval_wait(interval)
+			interval.wait()
 			if i == 1 {
 				var addr uint32
 				if y&0x8 != 0 {
@@ -119,12 +119,11 @@ func (disp *Display) paint() {
 	defer mgr.Close()
 
 	// create interval
-	interval := C.interval_create(period)
-	if interval == -1 {
-		err = errors.New("Couldn't create interval")
+	interval, err := newInterval(period)
+	if err != nil {
 		return
 	}
-	defer C.interval_destroy(interval)
+	defer interval.close()
 
 	// signal successful startup
 	disp.cerr <- nil
@@ -188,4 +187,22 @@ func (disp *Display) Frame(img *image.RGBA) {
 func (disp *Display) Stop() {
 	disp.cterm <- true
 	<-disp.cerr
+}
+
+type interval int
+
+func newInterval(ns uint64) (interval, error) {
+	fd := C.interval_create(C.uint64_t(ns))
+	if fd == -1 {
+		return 0, errors.New("Couldn't create interval")
+	}
+	return interval(fd), nil
+}
+
+func (interval interval) wait() (count uint64) {
+	return uint64(C.interval_wait(C.int(interval)))
+}
+
+func (interval interval) close() {
+	C.interval_destroy(C.int(interval))
 }
