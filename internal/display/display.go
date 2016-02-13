@@ -55,23 +55,23 @@ func paint(mgr *gpio.Gpio, interval C.int, img *image.RGBA) {
 			for x := img.Rect.Min.X; x < img.Rect.Max.X; x++ {
 				var data uint32
 				color := img.RGBAAt(x, y)
-				if color.R > thresh {
+				if color.R >= thresh {
 					data |= 1 << pinR1
 				}
-				if color.G > thresh {
+				if color.G >= thresh {
 					data |= 1 << pinG1
 				}
-				if color.B > thresh {
+				if color.B >= thresh {
 					data |= 1 << pinB1
 				}
 				color = img.RGBAAt(x, y+yStride)
-				if color.R > thresh {
+				if color.R >= thresh {
 					data |= 1 << pinR2
 				}
-				if color.G > thresh {
+				if color.G >= thresh {
 					data |= 1 << pinG2
 				}
-				if color.B > thresh {
+				if color.B >= thresh {
 					data |= 1 << pinB2
 				}
 				mgr.Set(data, 1<<pinR1|1<<pinG1|1<<pinB1|1<<pinR2|1<<pinG2|1<<pinB2)
