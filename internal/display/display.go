@@ -1,11 +1,12 @@
 package display
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"github.com/bgilbert/biscornu/internal/gpio"
 	"image"
+	"io"
+	"os"
 	"reflect"
 	"syscall"
 )
@@ -193,12 +194,15 @@ func (disp *Display) Stop() {
 	<-disp.cerr
 }
 
-type interval int
+type interval struct {
+	f io.ReadCloser
+}
 
 func newInterval(ns uint64) (_ interval, err error) {
 	fd, _, errno := syscall.Syscall(syscall.SYS_TIMERFD_CREATE, C.CLOCK_MONOTONIC, C.TFD_CLOEXEC, 0)
 	if fd == ^uintptr(0) {
-		return 0, errors.New("Couldn't create timerfd: " + errno.Error())
+		err = errors.New("Couldn't create timerfd: " + errno.Error())
+		return
 	}
 	defer func() {
 		if err != nil {
@@ -216,22 +220,22 @@ func newInterval(ns uint64) (_ interval, err error) {
 	}
 	ret, _, errno := syscall.Syscall6(syscall.SYS_TIMERFD_SETTIME, fd, 0, reflect.ValueOf(&ispec).Pointer(), 0, 0, 0)
 	if ret == ^uintptr(0) {
-		return 0, errors.New("Couldn't set interval: " + errno.Error())
+		err = errors.New("Couldn't set interval: " + errno.Error())
+		return
 	}
-	return interval(fd), nil
+
+	return interval{os.NewFile(fd, "timerfd")}, nil
 }
 
 func (interval interval) wait() (count uint64) {
-	var buf [8]byte
-	n, err := syscall.Read(int(interval), buf[:])
-	if n < 8 || err != nil {
-		return
-	}
 	// We really want binary.NativeEndian, but Go doesn't have it
-	binary.Read(bytes.NewReader(buf[:]), binary.LittleEndian, &count)
+	err := binary.Read(interval.f, binary.LittleEndian, &count)
+	if err != nil {
+		return 0
+	}
 	return
 }
 
 func (interval interval) close() {
-	syscall.Close(int(interval))
+	interval.f.Close()
 }
