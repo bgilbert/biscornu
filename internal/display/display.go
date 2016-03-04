@@ -66,7 +66,6 @@ const (
 
 type Display struct {
 	cimage chan image.RGBA
-	cterm  chan bool
 	cerr   chan error
 }
 
@@ -168,20 +167,19 @@ func (disp *Display) paint() {
 	defer mgr.Remove(pinOE)
 
 	// get initial image
-	img := <-disp.cimage
+	img, ok := <-disp.cimage
+	if !ok {
+		return
+	}
 
 	// paint forever
 	for {
-		// check for termination, which has priority over new images
+		// check for new image or termination
 		select {
-		case <-disp.cterm:
-			return
-		default:
-		}
-
-		// check for new image
-		select {
-		case img = <-disp.cimage:
+		case img, ok = <-disp.cimage:
+			if !ok {
+				return
+			}
 		default:
 		}
 
@@ -192,7 +190,6 @@ func (disp *Display) paint() {
 func New() (disp *Display, err error) {
 	disp = &Display{
 		cimage: make(chan image.RGBA),
-		cterm:  make(chan bool),
 		cerr:   make(chan error),
 	}
 	go disp.paint()
@@ -208,7 +205,7 @@ func (disp *Display) Frame(img *image.RGBA) {
 }
 
 func (disp *Display) Stop() {
-	disp.cterm <- true
+	close(disp.cimage)
 	<-disp.cerr
 }
 
